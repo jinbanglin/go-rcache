@@ -313,19 +313,6 @@ func (c *cache) GetService(service string) ([]*registry.Service, error) {
 	return services, nil
 }
 
-func (c *cache) ListServices() ([]*registry.Service, error) {
-	var services []*registry.Service
-
-	c.RLock()
-	defer c.RUnlock()
-
-	for k, _ := range c.cache {
-		services = append(services, &registry.Service{Name: k})
-	}
-
-	return services, nil
-}
-
 func (c *cache) Stop() {
 	select {
 	case <-c.exit:
