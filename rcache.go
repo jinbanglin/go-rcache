@@ -32,6 +32,7 @@ type cache struct {
 	cache map[string][]*registry.Service
 	ttls  map[string]time.Time
 
+	once sync.Once
 	exit chan bool
 }
 
@@ -297,6 +298,11 @@ func (c *cache) watch(w registry.Watcher) error {
 }
 
 func (c *cache) GetService(service string) ([]*registry.Service, error) {
+	// lazily run watcher on first request
+	c.once.Do(func() {
+		go c.run()
+	})
+
 	// get the service
 	services, err := c.get(service)
 	if err != nil {
@@ -335,14 +341,11 @@ func New(r registry.Registry, opts ...Option) Cache {
 		o(&options)
 	}
 
-	c := &cache{
+	return &cache{
 		Registry: r,
 		opts:     options,
 		cache:    make(map[string][]*registry.Service),
 		ttls:     make(map[string]time.Time),
 		exit:     make(chan bool),
 	}
-
-	go c.run()
-	return c
 }
