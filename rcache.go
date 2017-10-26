@@ -120,7 +120,7 @@ func (c *cache) get(service string) ([]*registry.Service, error) {
 
 	// within ttl so return cache
 	if kk && time.Since(ttl) < c.opts.TTL {
-		return services, nil
+		return c.cp(services), nil
 	}
 
 	// expired entry so get service
@@ -129,7 +129,7 @@ func (c *cache) get(service string) ([]*registry.Service, error) {
 	}
 
 	// return expired cache as last resort
-	return services, nil
+	return c.cp(services), nil
 }
 
 func (c *cache) set(service string, services []*registry.Service) {
