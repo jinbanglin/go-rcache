@@ -16,9 +16,16 @@ type Cache interface {
 	Stop()
 }
 
+type Options struct {
+	// TTL is the cache TTL
+	TTL time.Duration
+}
+
+type Option func(o *Options)
+
 type cache struct {
 	registry.Registry
-	ttl time.Duration
+	opts Options
 
 	// registry cache
 	sync.RWMutex
@@ -86,20 +93,13 @@ func (c *cache) get(service string) ([]*registry.Service, error) {
 	defer c.Unlock()
 
 	// check the cache first
-	services, ok := c.cache[service]
-	ttl, kk := c.ttls[service]
-
-	// got results, copy and return
-	if ok && len(services) > 0 {
-		// only return if its less than the ttl
-		if kk && time.Since(ttl) < c.ttl {
-			return c.cp(services), nil
-		}
+	if services, ok := c.cache[service]; ok && len(services) > 0 {
+		return c.cp(services), nil
 	}
 
-	// cache miss or ttl expired
+	// cache miss
 
-	// now ask the registry
+	// ask the registry
 	services, err := c.Registry.GetService(service)
 	if err != nil {
 		return nil, err
@@ -107,13 +107,13 @@ func (c *cache) get(service string) ([]*registry.Service, error) {
 
 	// we didn't have any results so cache
 	c.cache[service] = c.cp(services)
-	c.ttls[service] = time.Now().Add(c.ttl)
+	c.ttls[service] = time.Now().Add(c.opts.TTL)
 	return services, nil
 }
 
 func (c *cache) set(service string, services []*registry.Service) {
 	c.cache[service] = services
-	c.ttls[service] = time.Now().Add(c.ttl)
+	c.ttls[service] = time.Now().Add(c.opts.TTL)
 }
 
 func (c *cache) update(res *registry.Result) {
@@ -262,10 +262,20 @@ func (c *cache) tick() {
 		case <-t.C:
 			c.Lock()
 			for service, expiry := range c.ttls {
-				if d := time.Since(expiry); d > c.ttl {
-					// TODO: maybe refresh the cache rather than blowing it away
-					c.del(service)
+				// only process expired entries
+				if d := time.Since(expiry); d < c.opts.TTL {
+					continue
 				}
+
+				// service expired so update
+				services, err := c.Registry.GetService(service)
+				if err != nil {
+					// ugh
+					continue
+				}
+
+				// cache
+				c.set(service, services)
 			}
 			c.Unlock()
 		case <-c.exit:
@@ -297,14 +307,12 @@ func (c *cache) watch(w registry.Watcher) error {
 
 func (c *cache) GetService(service string) ([]*registry.Service, error) {
 	// get the service
-	// try the cache first
-	// if that fails go directly to the registry
 	services, err := c.get(service)
 	if err != nil {
 		return nil, err
 	}
 
-	// if there's nothing left, return
+	// if there's nothing return err
 	if len(services) == 0 {
 		return nil, registry.ErrNotFound
 	}
@@ -327,10 +335,18 @@ func (c *cache) String() string {
 }
 
 // New returns a new cache
-func New(r registry.Registry) Cache {
+func New(r registry.Registry, opts ...Option) Cache {
+	options := Options{
+		TTL: DefaultTTL,
+	}
+
+	for _, o := range opts {
+		o(&options)
+	}
+
 	c := &cache{
 		Registry: r,
-		ttl:      DefaultTTL,
+		opts:     options,
 		cache:    make(map[string][]*registry.Service),
 		ttls:     make(map[string]time.Time),
 		exit:     make(chan bool),
