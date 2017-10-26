@@ -92,22 +92,42 @@ func (c *cache) get(service string) ([]*registry.Service, error) {
 	c.Lock()
 	defer c.Unlock()
 
+	// get does the actual request for a service
+	// it also caches it
+	get := func(service string) ([]*registry.Service, error) {
+		// ask the registry
+		services, err := c.Registry.GetService(service)
+		if err != nil {
+			return nil, err
+		}
+
+		// cache results
+		c.set(service, services)
+		return services, nil
+	}
+
 	// check the cache first
-	if services, ok := c.cache[service]; ok && len(services) > 0 {
-		return c.cp(services), nil
+	services, ok := c.cache[service]
+
+	// cache miss or no services
+	if !ok || len(services) == 0 {
+		return get(service)
 	}
 
-	// cache miss
+	// got cache but lets check ttl
+	ttl, kk := c.ttls[service]
 
-	// ask the registry
-	services, err := c.Registry.GetService(service)
-	if err != nil {
-		return nil, err
+	// within ttl so return cache
+	if kk && time.Since(ttl) < c.opts.TTL {
+		return services, nil
 	}
 
-	// we didn't have any results so cache
-	c.cache[service] = c.cp(services)
-	c.ttls[service] = time.Now().Add(c.opts.TTL)
+	// expired entry so get service
+	if services, err := get(service); err == nil {
+		return services, nil
+	}
+
+	// return expired cache as last resort
 	return services, nil
 }
 
@@ -226,11 +246,7 @@ func (c *cache) update(res *registry.Result) {
 
 // run starts the cache watcher loop
 // it creates a new watcher if there's a problem
-// reloads the watcher if Init is called
-// and returns when Close is called
 func (c *cache) run() {
-	go c.tick()
-
 	for {
 		// exit early if already dead
 		if c.quit() {
@@ -249,37 +265,6 @@ func (c *cache) run() {
 		if err := c.watch(w); err != nil {
 			log.Log(err)
 			continue
-		}
-	}
-}
-
-// check cache and expire on each tick
-func (c *cache) tick() {
-	t := time.NewTicker(time.Minute)
-
-	for {
-		select {
-		case <-t.C:
-			c.Lock()
-			for service, expiry := range c.ttls {
-				// only process expired entries
-				if d := time.Since(expiry); d < c.opts.TTL {
-					continue
-				}
-
-				// service expired so update
-				services, err := c.Registry.GetService(service)
-				if err != nil {
-					// ugh
-					continue
-				}
-
-				// cache
-				c.set(service, services)
-			}
-			c.Unlock()
-		case <-c.exit:
-			return
 		}
 	}
 }
