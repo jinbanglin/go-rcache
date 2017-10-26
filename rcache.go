@@ -103,7 +103,7 @@ func (c *cache) get(service string) ([]*registry.Service, error) {
 		}
 
 		// cache results
-		c.set(service, services)
+		c.set(service, c.cp(services))
 		return services, nil
 	}
 
