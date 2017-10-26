@@ -256,14 +256,20 @@ func (c *cache) run() {
 		// create new watcher
 		w, err := c.Registry.Watch()
 		if err != nil {
-			log.Log(err)
+			if c.quit() {
+				return
+			}
+			log.Log("rcache: ", err)
 			time.Sleep(time.Second)
 			continue
 		}
 
 		// watch for events
 		if err := c.watch(w); err != nil {
-			log.Log(err)
+			if c.quit() {
+				return
+			}
+			log.Log("rcache: ", err)
 			continue
 		}
 	}
