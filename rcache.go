@@ -124,9 +124,19 @@ func (c *cache) get(service string) ([]*registry.Service, error) {
 	}
 
 	// expired entry so get service
-	if services, err := get(service); err == nil {
+	services, err := get(service)
+
+	// no error then return error
+	if err == nil {
 		return services, nil
 	}
+
+	// not found error then return
+	if err == registry.ErrNotFound {
+		return nil, err
+	}
+
+	// other error
 
 	// return expired cache as last resort
 	return c.cp(services), nil
