@@ -29,8 +29,9 @@ type cache struct {
 
 	// registry cache
 	sync.RWMutex
-	cache map[string][]*registry.Service
-	ttls  map[string]time.Time
+	cache   map[string][]*registry.Service
+	ttls    map[string]time.Time
+	watched map[string]bool
 
 	once sync.Once
 	exit chan bool
@@ -92,6 +93,12 @@ func (c *cache) del(service string) {
 func (c *cache) get(service string) ([]*registry.Service, error) {
 	c.Lock()
 	defer c.Unlock()
+
+	// watch service if not watched
+	if _, ok := c.watched[service]; !ok {
+		go c.run(service)
+		c.watched[service] = true
+	}
 
 	// get does the actual request for a service
 	// it also caches it
@@ -257,7 +264,7 @@ func (c *cache) update(res *registry.Result) {
 
 // run starts the cache watcher loop
 // it creates a new watcher if there's a problem
-func (c *cache) run() {
+func (c *cache) run(service string) {
 	for {
 		// exit early if already dead
 		if c.quit() {
@@ -265,7 +272,9 @@ func (c *cache) run() {
 		}
 
 		// create new watcher
-		w, err := c.Registry.Watch()
+		w, err := c.Registry.Watch(
+			registry.WatchService(service),
+		)
 		if err != nil {
 			if c.quit() {
 				return
@@ -308,11 +317,6 @@ func (c *cache) watch(w registry.Watcher) error {
 }
 
 func (c *cache) GetService(service string) ([]*registry.Service, error) {
-	// lazily run watcher on first request
-	c.once.Do(func() {
-		go c.run()
-	})
-
 	// get the service
 	services, err := c.get(service)
 	if err != nil {
@@ -354,6 +358,7 @@ func New(r registry.Registry, opts ...Option) Cache {
 	return &cache{
 		Registry: r,
 		opts:     options,
+		watched:  make(map[string]bool),
 		cache:    make(map[string][]*registry.Service),
 		ttls:     make(map[string]time.Time),
 		exit:     make(chan bool),
