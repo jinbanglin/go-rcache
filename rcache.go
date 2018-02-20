@@ -33,7 +33,6 @@ type cache struct {
 	ttls    map[string]time.Time
 	watched map[string]bool
 
-	once sync.Once
 	exit chan bool
 }
 
