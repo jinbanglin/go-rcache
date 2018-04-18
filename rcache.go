@@ -1,6 +1,8 @@
 package rcache
 
 import (
+	"math"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -38,7 +40,16 @@ type cache struct {
 
 var (
 	DefaultTTL = time.Minute
+
+	r = rand.New(rand.NewSource(time.Now().UnixNano()))
 )
+
+func backoff(attempts int) time.Duration {
+	if attempts == 0 {
+		return time.Duration(0)
+	}
+	return time.Duration(math.Pow(10, float64(attempts))) * time.Millisecond
+}
 
 func (c *cache) quit() bool {
 	select {
@@ -264,11 +275,17 @@ func (c *cache) update(res *registry.Result) {
 // run starts the cache watcher loop
 // it creates a new watcher if there's a problem
 func (c *cache) run(service string) {
+	var a, b int
+
 	for {
 		// exit early if already dead
 		if c.quit() {
 			return
 		}
+
+		// jitter before starting
+		j := r.Int63n(100)
+		time.Sleep(time.Duration(j) * time.Millisecond)
 
 		// create new watcher
 		w, err := c.Registry.Watch(
@@ -278,19 +295,30 @@ func (c *cache) run(service string) {
 			if c.quit() {
 				return
 			}
-			log.Log("rcache: ", err)
-			time.Sleep(time.Second)
+			d := backoff(a)
+			log.Log("rcache: ", err, " backing off ", d)
+			time.Sleep(d)
+			a += 1
 			continue
 		}
+
+		// reset a
+		a = 0
 
 		// watch for events
 		if err := c.watch(w); err != nil {
 			if c.quit() {
 				return
 			}
-			log.Log("rcache: ", err)
+			d := backoff(b)
+			log.Log("rcache: ", err, " backing off ", d)
+			time.Sleep(d)
+			b += 1
 			continue
 		}
+
+		// reset b
+		b = 0
 	}
 }
 
