@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/micro/go-log"
-	"github.com/micro/go-micro/registry"
+	"github.com/jinbanglin/log"
+	"github.com/jinbanglin/go-micro/registry"
 )
 
 // Cache is the registry cache interface
@@ -296,7 +296,7 @@ func (c *cache) run(service string) {
 				return
 			}
 			d := backoff(a)
-			log.Log("rcache: ", err, " backing off ", d)
+			log.Info("rcache: ", err, " backing off ", d)
 			time.Sleep(d)
 			a += 1
 			continue
@@ -311,7 +311,7 @@ func (c *cache) run(service string) {
 				return
 			}
 			d := backoff(b)
-			log.Log("rcache: ", err, " backing off ", d)
+			log.Info("rcache: ", err, " backing off ", d)
 			time.Sleep(d)
 			b += 1
 			continue

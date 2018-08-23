@@ -1,6 +1,6 @@
-# Registry Cache [![License](https://img.shields.io/:license-apache-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![GoDoc](https://godoc.org/github.com/micro/go-rcache?status.svg)](https://godoc.org/github.com/micro/go-rcache)
+# Registry Cache [![License](https://img.shields.io/:license-apache-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![GoDoc](https://godoc.org/github.com/jinbanglin/go-rcache?status.svg)](https://godoc.org/github.com/jinbanglin/go-rcache)
 
-Go-rcache is a library that provides a caching layer for the go-micro [registry](https://godoc.org/github.com/micro/go-micro/registry#Registry).
+Go-rcache is a library that provides a caching layer for the go-micro [registry](https://godoc.org/github.com/jinbanglin/go-micro/registry#Registry).
 
 If you're looking for caching in your microservices use the [selector](https://micro.mu/docs/fault-tolerance.html#caching-discovery).
 
@@ -20,8 +20,8 @@ type Cache interface {
 
 ```
 import (
-	"github.com/micro/go-micro/registry"
-	"github.com/micro/go-rcache"
+	"github.com/jinbanglin/go-micro/registry"
+	"github.com/jinbanglin/go-rcache"
 )
 
 r := registry.NewRegistry()
